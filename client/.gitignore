@@ -31,3 +31,4 @@ build/
 
 ### VS Code ###
 .vscode/
+/src/main/java/com/shipproxy/client/client_logs.txt.txt
