@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.HttpHeaders;
@@ -32,8 +33,9 @@ public class ClientApplication {
     private final BlockingQueue<ProxyRequest> requestQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<ProxyResponse> responseQueue = new LinkedBlockingQueue<>();
 
-    //    TODO : Move this to app config
-    private final String offshoreProxyUrl = "http://localhost:9091";
+    @Value("${offshore.proxy.url}")
+    private String offshoreProxyUrl;
+
     @Autowired
     private WebClient webClient;
 

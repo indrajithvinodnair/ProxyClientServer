@@ -2,6 +2,7 @@ package com.shipproxy.client.config;
 
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -16,11 +17,14 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class WebClientConfig {
 
+    @Value("${offshore.proxy.url}")
+    private String offshoreProxyUrl;
+
+    @Value("${enable.wiretap}")
+    private boolean enableWireTap;
+
     @Bean
     public WebClient webClient() {
-        String offshoreProxyUrl = "http://localhost:9091"; // TODO: Move these to app config
-        boolean enableWireTap = true;
-
         // Configure connection pool for a SINGLE persistent connection
         ConnectionProvider connectionProvider = ConnectionProvider.builder("fixed")
                 .maxConnections(1) // Single connection
