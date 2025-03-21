@@ -75,7 +75,7 @@ public class ClientApplication {
                     ProxyRequest request = requestQueue.take(); // Wait for a request to process
                     logger.info("Processing request: {}", request.getRequestId());
 
-                    ResponseEntity<String> response = forwardRequestReactive(request).block(); // ✅ Process
+                    ResponseEntity<String> response = forwardRequestReactive(request).block();
 
                     // Push response to response queue
                     responseQueue.put(new ProxyResponse(request.getRequestId(), response));
@@ -91,7 +91,7 @@ public class ClientApplication {
 
 
     private Mono<ResponseEntity<String>> forwardRequestReactive(ProxyRequest request) {
-        return webClient.method(request.getHttpMethod()).uri(offshoreProxyUrl + request.getUrl()) // ✅ Ensure Offshore Proxy URL is correct
+        return webClient.method(request.getHttpMethod()).uri(offshoreProxyUrl + request.getUrl()) //Ensure Offshore Proxy URL is correct
                 .headers(httpHeaders -> {
                     httpHeaders.addAll(request.getHeaders());
                     httpHeaders.add("X-Request-Id", request.getRequestId()); // Add UUID header
