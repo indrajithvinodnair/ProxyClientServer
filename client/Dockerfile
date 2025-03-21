@@ -13,15 +13,6 @@ COPY client/pom.xml .
 # Copy the source code
 COPY client/src ./src
 
-# Accept build arguments
-ARG OFFSHORE_PROXY_URL
-
-# Set environment variables
-ENV OFFSHORE_PROXY_URL=${OFFSHORE_PROXY_URL}
-
-# Replace the placeholder in application.properties
-RUN sed -i "s|http://localhost:9090|${OFFSHORE_PROXY_URL}|g" src/main/resources/application.properties
-
 # Build the application
 RUN mvn -f pom.xml clean install -DskipTests
 
