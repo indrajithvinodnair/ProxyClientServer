@@ -19,6 +19,7 @@ import reactor.core.publisher.Mono;
 
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -120,8 +121,9 @@ class ServerApplicationTest {
 
         // Verify response
         ResponseEntity<String> responseEntity = response.block();
+        assert responseEntity != null;
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, responseEntity.getStatusCode());
-        assertTrue(responseEntity.getBody().contains("Internal Server Error"));
+        assertTrue(Objects.requireNonNull(responseEntity.getBody()).contains("Internal Server Error"));
     }
 
     @TestConfiguration
