@@ -12,17 +12,6 @@ WORKDIR /app/server
 COPY  server/pom.xml .
 # Copy the source code
 COPY server/src ./src
-
-# Accept build arguments
-ARG ALLOWED_ORIGINS
-
-# Set environment variables
-ENV ALLOWED_ORIGINS=${OALLOWED_ORIGINS}
-
-# Replace the placeholder in application.properties
-RUN sed -i "s|http://localhost:8080|${ALLOWED_ORIGINS}|g" src/main/resources/application.properties
-
-
 # Build the application
 RUN mvn -f pom.xml clean install -DskipTests
 
