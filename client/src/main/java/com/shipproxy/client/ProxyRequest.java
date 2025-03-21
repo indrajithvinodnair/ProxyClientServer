@@ -12,4 +12,5 @@ public class ProxyRequest {
     private String body;
     private HttpHeaders headers;
     private HttpMethod httpMethod;
+    private String requestId;
 }
