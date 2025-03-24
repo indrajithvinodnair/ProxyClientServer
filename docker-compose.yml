@@ -1,6 +1,6 @@
 services:
   server:
-    build: 
+    build:
       context: .
       dockerfile: server/Dockerfile
     environment:
@@ -11,11 +11,12 @@ services:
       - offshore-proxy-secure-network
 
   client:
-    build: 
+    build:
       context: .
       dockerfile: client/Dockerfile
     environment:
       - OFFSHORE_PROXY_URL=http://server:9090
+      - LOGGING_LEVEL_REACTOR_NETTY_TRANSPORT_CONFIG=TRACE
     ports:
       - "8080:8080"
     depends_on:
