@@ -25,7 +25,7 @@ public class ProxyWebSocketHandler extends TextWebSocketHandler {
         executorService.submit(() -> {
             try {
                 String requestUrl = message.getPayload();
-                logger.info("Received request for: {}", requestUrl);
+                logger.info("Received request through channel id : {}", session.toString());
 
                 // Forward the request to the actual destination
                 ResponseEntity<String> response = webClient.get()
@@ -36,7 +36,9 @@ public class ProxyWebSocketHandler extends TextWebSocketHandler {
 
                 // Send the response back to the client
                 session.sendMessage(new TextMessage(response.getBody()));
-                logger.info("Response sent for: {}", requestUrl);
+                logger.info("Response sent through channel id : {}",  session.toString());
+                logger.debug("🛠️ Sending response over WebSocket: {}", response);
+
             } catch (Exception e) {
                 logger.error("Error processing request: {}", e.getMessage());
             }

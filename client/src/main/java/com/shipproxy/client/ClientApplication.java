@@ -106,7 +106,8 @@ public class ClientApplication {
             while (true) {
                 try {
                     ProxyRequest request = requestQueue.take();
-                    logger.info("Processing request: {}", request.getRequestId());
+                    logger.info("🚀 Sending request {} over WebSocket (Channel ID: {}): {}", request.getRequestId(),session.getId(), request.getUrl());
+
 
                     if (session == null || !session.isOpen()) {
                         logger.warn("WebSocket session is closed, waiting...");
