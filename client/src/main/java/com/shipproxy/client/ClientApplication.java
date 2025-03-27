@@ -4,25 +4,21 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+import org.springframework.web.socket.*;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.net.URI;
 import java.util.UUID;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 
 import static com.shipproxy.client.utils.HeaderUtils.getHeaders;
 
@@ -31,84 +27,99 @@ import static com.shipproxy.client.utils.HeaderUtils.getHeaders;
 public class ClientApplication {
     private static final Logger logger = LoggerFactory.getLogger(ClientApplication.class);
     private final BlockingQueue<ProxyRequest> requestQueue = new LinkedBlockingQueue<>();
-    private final BlockingQueue<ProxyResponse> responseQueue = new LinkedBlockingQueue<>();
-
-    @Value("${offshore.proxy.url}")
-    private String offshoreProxyUrl;
-
-    @Autowired
-    private WebClient webClient;
+    private final BlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
+    private volatile WebSocketSession session;
 
     public static void main(String[] args) {
         SpringApplication.run(ClientApplication.class, args);
     }
 
-    @RequestMapping(value = "/**")
-    public ResponseEntity<String> handleRequests(HttpServletRequest httpServletRequest, @RequestBody(required = false) String body) {
-        String url = httpServletRequest.getRequestURI();
-        if (url == null) {
-            return ResponseEntity.badRequest().body("Missing URL parameter");
-        }
+    @PostConstruct
+    public void init() {
+        connectWebSocket();
+        startProcessing();
+    }
 
+    private void connectWebSocket() {
+        Executors.newSingleThreadScheduledExecutor().scheduleWithFixedDelay(() -> {
+            if (session == null || !session.isOpen()) {
+                try {
+                    logger.info("Attempting WebSocket connection...");
+
+                    StandardWebSocketClient client = new StandardWebSocketClient();
+                    WebSocketHandler handler = new TextWebSocketHandler() {
+                        @Override
+                        protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+                            responseQueue.add(message.getPayload());  // Add response to queue
+                        }
+
+                        @Override
+                        public void afterConnectionEstablished(WebSocketSession session) {
+                            ClientApplication.this.session = session;
+                            String sessionId = session.getId(); // WebSocket session ID
+                            String channelId = session.toString(); // Includes Netty TCP Channel info
+
+                            logger.info("✅ WebSocket connection established with server.");
+                            logger.info("🔗 WebSocket Session ID: {}", sessionId);
+                            logger.info("🛠️ Netty TCP Channel Info: {}", channelId);
+                        }
+
+
+                        @Override
+                        public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+                            logger.warn("❌ WebSocket connection closed. Status: {}", status);
+                            ClientApplication.this.session = null;
+                        }
+                    };
+
+                    session = client.doHandshake(handler, new WebSocketHttpHeaders(), URI.create("ws://localhost:9090/ws")).get();
+                    logger.info("✅ WebSocket connected successfully.");
+
+                } catch (Exception e) {
+                    logger.error("❌ WebSocket connection failed. Retrying...", e);
+                }
+            }
+        }, 0, 5, TimeUnit.SECONDS); // Retry every 5 seconds if disconnected
+    }
+
+
+
+    @RequestMapping(value = "/**")
+    public ResponseEntity<String> handleRequests(HttpServletRequest request, @RequestBody(required = false) String body) {
         String requestId = UUID.randomUUID().toString();
-        ProxyRequest proxyRequest = new ProxyRequest(url, body, getHeaders(httpServletRequest), HttpMethod.valueOf(httpServletRequest.getMethod()), requestId);
+        ProxyRequest proxyRequest = new ProxyRequest(request.getRequestURI(), body,  getHeaders(request), HttpMethod.valueOf(request.getMethod()), requestId);
 
         try {
             requestQueue.put(proxyRequest);
 
-            // Wait for response in the response queue
-            ProxyResponse response = responseQueue.take();
-
-            return response.getResponse();
+            // Wait for response
+            String responseBody = responseQueue.take();
+            return ResponseEntity.ok(responseBody);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return ResponseEntity.internalServerError().body("Error processing request: Interrupted");
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
-
-    @PostConstruct
-    public void startProcessing() {
+    private void startProcessing() {
         Executors.newSingleThreadExecutor().submit(() -> {
-            try {
-                while (true) {
-                    ProxyRequest request = requestQueue.take(); // Wait for a request to process
+            while (true) {
+                try {
+                    ProxyRequest request = requestQueue.take();
                     logger.info("Processing request: {}", request.getRequestId());
 
-                    ResponseEntity<String> response = forwardRequestReactive(request).block();
+                    if (session == null || !session.isOpen()) {
+                        logger.warn("WebSocket session is closed, waiting...");
+                        continue;
+                    }
 
-                    // Push response to response queue
-                    responseQueue.put(new ProxyResponse(request.getRequestId(), response));
+                    String fullUrl = "http://" + request.getHeaders().getFirst("host") + request.getUrl();
+                    session.sendMessage(new TextMessage(fullUrl));
+
+                } catch (Exception e) {
+                    logger.error("Error processing request:", e);
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.error("Processing interrupted", e);
-            } catch (Exception e) {
-                logger.error("Error processing request:", e);
             }
         });
-    }
-
-
-    private Mono<ResponseEntity<String>> forwardRequestReactive(ProxyRequest request) {
-        return webClient.method(request.getHttpMethod()).uri(offshoreProxyUrl + request.getUrl()) //Ensure Offshore Proxy URL is correct
-                .headers(httpHeaders -> {
-                    httpHeaders.addAll(request.getHeaders());
-                    httpHeaders.add("X-Request-Id", request.getRequestId()); // Add UUID header
-                }).body(request.getBody() != null ? BodyInserters.fromValue(request.getBody()) : BodyInserters.empty()).retrieve().toEntity(String.class) // Get full response with headers & status
-                .map(responseEntity -> {
-                    logger.info("Forwarding response for: {}", request.getRequestId());
-                    logger.debug("Forwarding response to client, response body: {}", responseEntity.getBody());
-
-                    //Ensure correct content type is returned
-                    HttpHeaders responseHeaders = new HttpHeaders();
-                    responseHeaders.addAll(responseEntity.getHeaders());
-                    responseHeaders.setContentType(MediaType.TEXT_HTML);
-
-                    return ResponseEntity.status(responseEntity.getStatusCode()).headers(responseHeaders).body(responseEntity.getBody());
-                }).onErrorResume(e -> {
-                    logger.error("Error forwarding response to client: {}", e.getMessage());
-                    return Mono.just(ResponseEntity.internalServerError().body("Error: " + e.getMessage()));
-                });
     }
 }
