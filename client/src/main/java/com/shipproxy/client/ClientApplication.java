@@ -9,6 +9,7 @@ package com.shipproxy.client;
     import jakarta.servlet.http.HttpServletRequest;
     import org.slf4j.Logger;
     import org.slf4j.LoggerFactory;
+    import org.springframework.beans.factory.annotation.Value;
     import org.springframework.boot.SpringApplication;
     import org.springframework.boot.autoconfigure.SpringBootApplication;
     import org.springframework.http.HttpMethod;
@@ -34,6 +35,9 @@ package com.shipproxy.client;
         private final BlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
         private volatile WebSocketSession session;
         private final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Value("${offshore.proxy.url}")
+        private String offshoreProxyUrl;
 
         public static void main(String[] args) {
             SpringApplication.run(ClientApplication.class, args);
@@ -64,7 +68,7 @@ package com.shipproxy.client;
                                 String sessionId = session.getId(); // WebSocket session ID
                                 String channelId = session.toString(); // Includes Netty TCP Channel info
 
-                                logger.info("✅ WebSocket connection established with server.");
+                                logger.info("✅ WebSocket connection established with server {} .", offshoreProxyUrl);
                                 logger.info("🔗 WebSocket Session ID: {}", sessionId);
                                 logger.info("🛠️ Netty TCP Channel Info: {}", channelId);
                             }
@@ -76,8 +80,9 @@ package com.shipproxy.client;
                             }
                         };
 
-                        session = client.doHandshake(handler, new WebSocketHttpHeaders(), URI.create("ws://localhost:9090/ws")).get();
-                        logger.info("✅ WebSocket connected successfully.");
+                        String wsUrl = offshoreProxyUrl.replace("http://", "ws://");
+                        session = client.doHandshake(handler, new WebSocketHttpHeaders(), URI.create(wsUrl + "/ws")).get();
+                        logger.info("✅ WebSocket connected successfully to {}.", offshoreProxyUrl);
 
                     } catch (Exception e) {
                         logger.error("❌ WebSocket connection failed. Retrying...", e);
