@@ -1,12 +1,16 @@
 package com.shipproxy.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shipproxy.common.ProxyRequest;
+import com.shipproxy.common.ProxyResponse;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +33,7 @@ public class ClientApplication {
     private final BlockingQueue<ProxyRequest> requestQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
     private volatile WebSocketSession session;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public static void main(String[] args) {
         SpringApplication.run(ClientApplication.class, args);
@@ -64,7 +69,6 @@ public class ClientApplication {
                             logger.info("🛠️ Netty TCP Channel Info: {}", channelId);
                         }
 
-
                         @Override
                         public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
                             logger.warn("❌ WebSocket connection closed. Status: {}", status);
@@ -82,22 +86,29 @@ public class ClientApplication {
         }, 0, 5, TimeUnit.SECONDS); // Retry every 5 seconds if disconnected
     }
 
-
-
     @RequestMapping(value = "/**")
     public ResponseEntity<String> handleRequests(HttpServletRequest request, @RequestBody(required = false) String body) {
         String requestId = UUID.randomUUID().toString();
-        ProxyRequest proxyRequest = new ProxyRequest(request.getRequestURI(), body,  getHeaders(request), HttpMethod.valueOf(request.getMethod()), requestId);
+        String fullUrl = request.getRequestURL().toString();
+        if (request.getQueryString() != null) {
+            fullUrl += "?" + request.getQueryString();
+        }
+        ProxyRequest proxyRequest = new ProxyRequest(fullUrl, body, getHeaders(request), HttpMethod.valueOf(request.getMethod()), requestId);
 
         try {
             requestQueue.put(proxyRequest);
 
             // Wait for response
             String responseBody = responseQueue.take();
-            return ResponseEntity.ok(responseBody);
+            ProxyResponse proxyResponse = objectMapper.readValue(responseBody, ProxyResponse.class);
+            return ResponseEntity.ok(proxyResponse.getResponse().getBody());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        } catch (JsonMappingException e) {
+            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -106,19 +117,21 @@ public class ClientApplication {
             while (true) {
                 try {
                     ProxyRequest request = requestQueue.take();
-                    logger.info("🚀 Sending request {} over WebSocket (Channel ID: {}): {}", request.getRequestId(),session.getId(), request.getUrl());
-
+                    logger.info("🚀 Sending request {} over WebSocket (Channel ID: {}): {}", request.getRequestId(), session.getId(), request.getUrl());
 
                     if (session == null || !session.isOpen()) {
                         logger.warn("WebSocket session is closed, waiting...");
                         continue;
                     }
 
-                    String fullUrl = "http://" + request.getHeaders().getFirst("host") + request.getUrl();
-                    session.sendMessage(new TextMessage(fullUrl));
+                    String jsonRequest = objectMapper.writeValueAsString(request);
+                    session.sendMessage(new TextMessage(jsonRequest));
 
-                } catch (Exception e) {
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     logger.error("Error processing request:", e);
+                } catch (JsonProcessingException e) {
+                    logger.error("Error serializing request to JSON:", e);
                 }
             }
         });

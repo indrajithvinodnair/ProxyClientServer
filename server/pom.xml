@@ -11,6 +11,12 @@
     <name>server</name>
     <description>Offshore server for handling requests made by the Ships onboard client</description>
     <dependencies>
+        <!-- Add the common module dependency -->
+        <dependency>
+            <groupId>com.shipproxy</groupId>
+            <artifactId>common</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

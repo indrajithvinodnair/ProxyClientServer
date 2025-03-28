@@ -55,6 +55,12 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Add the common module dependency -->
+        <dependency>
+            <groupId>com.shipproxy</groupId>
+            <artifactId>common</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
         <build>
         <plugins>
