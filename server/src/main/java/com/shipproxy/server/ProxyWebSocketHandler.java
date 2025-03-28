@@ -33,8 +33,7 @@ public class ProxyWebSocketHandler extends TextWebSocketHandler {
 
                 // Deserialize the message to ProxyRequest
                 ProxyRequest proxyRequest = objectMapper.readValue(payload, ProxyRequest.class);
-                logger.debug("Parsed ProxyRequest: {}", proxyRequest);
-                logger.debug("Forwarding request: Method={}, URL={}, Body={}", proxyRequest.getHttpMethod(), proxyRequest.getUrl(), proxyRequest.getBody());
+               logger.info("Recieved request with ID: {} through WebSocket channelId: {}", proxyRequest.getRequestId(), session.toString());
                 logger.debug("📤 Sending to WebClient: {}", objectMapper.writeValueAsString(proxyRequest));
 
 
