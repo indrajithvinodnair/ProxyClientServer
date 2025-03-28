@@ -1,4 +1,10 @@
 services:
+  common:
+    profiles: ["build-deps"]
+    build:
+      context: .
+      dockerfile: common/Dockerfile
+
   server:
     build:
       context: .
@@ -7,6 +13,8 @@ services:
       - ALLOWED_ORIGINS=http://client:8080
     ports:
       - "9090:9090"
+    depends_on:
+      - common
     networks:
       - offshore-proxy-secure-network
 
