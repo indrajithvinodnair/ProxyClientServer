@@ -1,30 +1,22 @@
-# First stage: build the application
+# Server Dockerfile - reuses Maven repo from common image
 FROM maven:3.9.8-eclipse-temurin-21 AS build
 
+# Copy pre-built Maven repository from common image
+COPY --from=common:latest /root/.m2 /root/.m2
+
 WORKDIR /app
 
-# Copy the parent pom.xml
-COPY pom.xml /app/pom.xml
+# Copy server files
+COPY pom.xml .
+COPY server/pom.xml ./server/pom.xml
+COPY server/src ./server/src
 
-WORKDIR /app/server
+# Build server (parent/common are already cached)
+RUN mvn -f server/pom.xml clean install -DskipTests
 
-# Copy server pom.xml
-COPY  server/pom.xml .
-# Copy the source code
-COPY server/src ./src
-# Build the application
-RUN mvn -f pom.xml clean install -DskipTests
-
-# Second stage: run the application
+# Runtime stage
 FROM eclipse-temurin:21-jre
-
-# Set the working directory to /app
 WORKDIR /app
-
-# Copy the built JAR from the first stage
 COPY --from=build /app/server/target/server-0.0.1-SNAPSHOT.jar /app/app.jar
-# Expose the application's port
 EXPOSE 9090
-
-# Run the application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
