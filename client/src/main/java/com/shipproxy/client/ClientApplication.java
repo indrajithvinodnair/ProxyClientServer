@@ -106,10 +106,10 @@ package com.shipproxy.client;
             }, 0, 5, TimeUnit.SECONDS);
         }
 
-        private void startProcessing() {
+       private void startProcessing() {
             singleThreadExecutor.submit(() -> {
-                while (true) {
-                    try {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) { // Check for thread interruption
                         ProxyRequest request = requestQueue.take();
                         logger.info("🚀 Sending request {} over WebSocket (Channel ID: {}): {}", request.getRequestId(), session.getId(), request.getUrl());
 
@@ -120,13 +120,14 @@ package com.shipproxy.client;
 
                         String jsonRequest = objectMapper.writeValueAsString(request);
                         session.sendMessage(new TextMessage(jsonRequest));
-
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        logger.error("Error processing request:", e);
-                    } catch (JsonProcessingException e) {
-                        logger.error("Error serializing request to JSON:", e);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); // Restore the interrupt status
+                    logger.info("Processing thread interrupted. Exiting...");
+                } catch (JsonProcessingException e) {
+                    logger.error("Error serializing request to JSON:", e);
+                } catch (Exception e) {
+                    logger.error("Unexpected error in processing thread:", e);
                 }
             });
         }
